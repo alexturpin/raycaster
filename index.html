@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+		<title>raycaster</title>
+		
+		<meta charset="utf-8">
+		
+		<script>
+			var map = {};
+			map.data = [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+						[1, 0, 0, 0, 3, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 1],
+						[1, 0, 0, 0, 3, 0, 2, 0, 2, 0, 3, 0, 0, 0, 0, 1],
+						[1, 0, 0, 0, 2, 2, 2, 0, 2, 2, 2, 0, 0, 0, 0, 1],
+						[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+						[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+						[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+						[1, 1, 1, 1, 1, 1, 1, 3, 1, 1, 1, 1, 1, 1, 1, 1]];
+			map.width = map.data[0].length;
+			map.height = map.data.length;
+			map.tileSize = 32;
+			
+			var colors = ["white", "gray", "blue", "red"];
+			
+			var canvasWidth = map.width * map.tileSize;
+			var canvasHeight = map.height * map.tileSize;
+			
+			var player = {};
+			player.x = ((map.width / 2) - 0.5) * map.tileSize;
+			player.y = ((map.height / 2) + 0.5) * map.tileSize;
+			player.angle = Math.PI * 1.5;
+			player.size = 16;
+			
+			var rendererContext, mapContext;
+			
+			var keys = [];
+			var KEY_LEFT = 37, KEY_UP = 38, KEY_RIGHT = 39, KEY_DOWN = 40;
+			
+			var fov = 60 * (Math.PI / 180);
+			var viewDist = (canvasWidth / 2) / Math.tan(fov / 2);
+			
+			window.onload = function() {
+				var rendererCanvas = document.createElement("canvas");
+				rendererCanvas.width = canvasWidth;
+				rendererCanvas.height = canvasHeight;
+				document.body.appendChild(rendererCanvas);
+				rendererContext = rendererCanvas.getContext("2d");
+				
+				var mapCanvas = document.createElement("canvas");
+				mapCanvas.width = canvasWidth;
+				mapCanvas.height = canvasHeight;
+				document.body.appendChild(mapCanvas);
+				mapContext = mapCanvas.getContext("2d");
+			};
+			
+			window.setInterval(function() {
+				update();
+				draw();
+			}, 1000 / 30);
+			
+			window.onkeydown = function(event) {
+				keys[event.which] = true;
+			};
+			
+			window.onkeyup = function(event) {
+				keys[event.which] = false;
+			};
+			
+			function update() {
+				if (keys[KEY_UP]) {
+					player.x += Math.cos(player.angle) * 2;
+					player.y -= Math.sin(player.angle) * 2;
+				}
+				
+				if (keys[KEY_DOWN]) {
+					player.x -= Math.cos(player.angle) * 2;
+					player.y += Math.sin(player.angle) * 2;
+				}
+				
+				if (keys[KEY_RIGHT])
+					player.angle -= 0.1;
+				
+				if (keys[KEY_LEFT])
+					player.angle += 0.1;
+			}
+			
+			function draw() {
+				//Map
+				mapContext.clearRect(0, 0, canvasWidth, canvasHeight);
+			
+				for(var y = 0; y < map.height; y++) {
+					for(var x = 0; x < map.width; x++) {
+						if (map.data[y][x] == 0)
+							continue;
+							
+						mapContext.fillStyle = colors[map.data[y][x]];
+						mapContext.fillRect(x * map.tileSize, y * map.tileSize, map.tileSize, map.tileSize);
+					}
+				}
+				
+				mapContext.beginPath();
+				mapContext.arc(player.x, player.y, player.size / 2, 0, Math.PI * 2);
+				mapContext.fillStyle = "green";
+				mapContext.fill();
+				
+				//Renderer
+				rendererContext.clearRect(0, 0, canvasWidth, canvasHeight);
+				
+				for(var i = 0, angle = player.angle + (fov / 2); i < canvasWidth; i++, angle -= fov / canvasWidth) {
+					var hit = castRay(player.x, player.y, angle);
+					
+					mapContext.beginPath();
+					mapContext.moveTo(hit.ox, hit.oy);
+					mapContext.lineTo(hit.x, hit.y);
+					mapContext.strokeStyle = "yellow";
+					mapContext.stroke();
+					
+					var height = map.tileSize / hit.dist * viewDist;
+					rendererContext.fillStyle = hit.color;
+					rendererContext.fillRect(i, (canvasHeight / 2) - (height / 2), 1, height);
+					rendererContext.fill();
+				}
+			}
+			
+			function castRay(ox, oy, angle) {
+				var x = ox;
+				var y = oy;
+				
+				var color = 0;
+				
+				while(true) {
+					if (x < 0 || y < 0 || x > map.width * map.tileSize || y > map.height * map.tileSize)
+						break;
+						
+					var mapX = Math.floor(x / map.tileSize);
+					var mapY = Math.floor(y / map.tileSize);
+					
+					if (map.data[mapY][mapX] != 0) {
+						color = colors[map.data[mapY][mapX]];
+						break;
+					}
+					
+					x += Math.cos(angle);
+					y -= Math.sin(angle);
+				}
+				
+				var dist = Math.sqrt(Math.pow(x - ox, 2) + Math.pow(y - oy, 2)) * Math.cos(player.angle - angle);
+				
+				return {ox: ox, oy: oy, x: x, y: y, color: color, dist: dist};
+			}
+		</script>
+	</head>
+	<body>
+	</body>
+</html>
